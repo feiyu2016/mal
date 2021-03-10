@@ -2,14 +2,22 @@ import os
 from enum import IntEnum 
 
 '''
+vhd: virtual hard disk formats supported by Microsoft
+
 Functions:
 1. Inspect vhd
 2. Write asm.bin to vhd boot sector
+
+Todo:
+1. write asm.bin to vhd boot sector
+2. print vhd file info (-vvv)
+3. argparse
 '''
 
 BIG_ORDER = 'big'
 
 class HardiskFooter:
+    # Field length define (in bytes)
     COOKIE = 8
     FEATURES = 4
     FILE_FORMAT_VERSION = 4
