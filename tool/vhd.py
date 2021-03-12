@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import argparse
 from enum import IntEnum 
 import os
 import sys
@@ -12,11 +13,12 @@ Functions:
 2. Write asm.bin to vhd boot sector
 
 Todo:
-1. write asm.bin to vhd boot sector
-2. print vhd file info (-v, -vv)
-3. argparse
-4. write vhd confirm, force with -f
-5. is valid vhd
+- * write asm.bin to vhd(fixed) boot sector
+* write asm.bin to vhd(dynamic) boot sector
+* print vhd file info (-v, -vv)
+* argparse
+* write vhd confirm, force with -f
+* is valid vhd
 '''
 
 BIG_ORDER = 'big'
@@ -218,13 +220,11 @@ class HardiskFooterHelper:
 
 class BootSector:
 
-    def burn(binfile, vhd):
-        with open(binfile, 'rb') as bin_handle:
+    def burn(args, vhd):
+        with open(args.src, 'rb') as bin_handle:
             # todo: check binfile size <= 510
             bin_buf = bin_handle.read()
             bin_len = len(bin_buf)
-            if bin_len > 510:
-                raise Exception("Bin file too large")
             
             # build boot sector data
             boot_sector = [0] * 512
@@ -232,20 +232,52 @@ class BootSector:
             boot_sector[-2] = 0x55
             boot_sector[-1] = 0xaa
 
-            vhd.seek(0)
-            vhd.write(bytes(boot_sector))
-            vhd.flush()
+            do_it = False
+            if not args.force_write:
+                do_it = yes_or_no("{} will be overwrite, are you sure? ".format(args.dst))
+
+            if do_it:
+                vhd.seek(0)
+                vhd.write(bytes(boot_sector))
+                vhd.flush()
+                print("Success: {} write to {} boot sector".format(args.src, args.dst))
             
+def yes_or_no(question):
+    answer = input(question + "(y/n): ").lower().strip()
+    print("")
+    while not(answer == "y" or answer == "yes" or \
+    answer == "n" or answer == "no"):
+        print("Input yes or no")
+        answer = input(question + "(y/n):").lower().strip()
+        print("")
+    if answer[0] == "y":
+        return True
+    else:
+        return False
 
 def parse_int(raw, p_begin, p_end):
     v = raw[p_begin:p_end]
     return int.from_bytes(v, byteorder = BIG_ORDER)
 
 if __name__ == "__main__":
-    src = sys.argv[1]
-    dst = sys.argv[2]
-    # todo: check os.path.exist
-    with open(dst, 'rb+') as handle:
-        vhd_img = VirtualHardDiskImage(handle)
-        if vhd_img.is_fixed_vhd():
-            BootSector.burn(src, handle)
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('-f', dest='force_write', action='store_true', help='Without confirm, force write bin to dest vhd file')
+    arg_parser.add_argument('src', help='source bin')
+    arg_parser.add_argument('dst', help='destination vhd file')
+    args = arg_parser.parse_args()
+
+    # check file exists
+    if os.path.exists(args.src) and os.path.exists(args.dst):
+        # check bin file size
+        if os.path.getsize(args.src) > 510:
+            print("Error: {} file size too big, it must be <= 510".format(args.src))
+        else:
+            with open(args.dst, 'rb+') as handle:
+                vhd_img = VirtualHardDiskImage(handle)
+                if vhd_img.is_fixed_vhd():
+                    BootSector.burn(args, handle)
+                else:
+                    print("Error: {} is not Fixed hard disk image".format(args.dst))
+    else:
+        print("Error: src or dst not exist")
+    
