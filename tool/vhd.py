@@ -1,5 +1,8 @@
-import os
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 from enum import IntEnum 
+import os
+import sys
 
 '''
 vhd: virtual hard disk formats supported by Microsoft
@@ -12,7 +15,7 @@ Todo:
 1. write asm.bin to vhd boot sector
 2. print vhd file info (-v, -vv)
 3. argparse
-4. write vhd confirm
+4. write vhd confirm, force with -f
 5. is valid vhd
 '''
 
@@ -23,13 +26,27 @@ class VirtualHardDiskImage:
     DynamicDikHeader = 1024
 
     def __init__(self, handle):
-        self.hdf = HardiskFooter(handle)
-        # self.ddh = DynamicDiskHeader(handle)
-        # n_entries = self.ddh.max_table_entries()
-        # self.bat = BAT(handle, n_entries)
+        self.hdf = None
+        self.ddh = None
+        self.bat = None
 
+        try:
+            self.hdf = HardiskFooter(handle)
+            self.ddh = DynamicDiskHeader(handle)
+            # n_entries = self.ddh.max_table_entries()
+            # self.bat = BAT(handle, n_entries)
+        except Exception as inst:
+            pass
+    
+    def is_fixed_vhd(self):
+        if self.hdf and HardiskFooterHelper(self.hdf).is_fixed_vhd():
+            return True
+        return False
 
+        
 class HardiskFooter:
+    CookieTag = b'conectix'
+
     # Hard disk footer fields Size(bytes) define
     Cookie = 8
     Features = 4
@@ -67,6 +84,7 @@ class HardiskFooter:
     OffsetReserved = 85
 
     def __init__(self, handle):
+        HardiskFooter.verify_cookie(handle)
         handle.seek(-512, os.SEEK_END)
         self.raw = handle.read() 
 
@@ -78,6 +96,12 @@ class HardiskFooter:
         DifferencingHardDisk = 4
         Reserved1 = 5
         Reserved2 = 6
+
+    def verify_cookie(handle):
+        handle.seek(-512, os.SEEK_END)
+        cookie = handle.read(HardiskFooter.Cookie) 
+        if cookie != HardiskFooter.CookieTag:
+            raise Exception("Invalid Hard disk footer")
 
     def data_offset(self):
         I = HardiskFooter
@@ -92,6 +116,8 @@ class HardiskFooter:
         return parse_int(self.raw, p1, p2)
 
 class DynamicDiskHeader:
+    CookieTag = b'cxsparse'
+
     # Dynamic Disk Header fields Size(bytes) define
     Cookie = 8
     DataOffset = 8
@@ -137,9 +163,21 @@ class DynamicDiskHeader:
     OffsetReserved = 768
 
     def __init__(self, handle):
+        DynamicDiskHeader.verify_cookie(handle)
         handle.seek(512)
         self.raw = handle.read(1024)
     
+    def verify_cookie(handle):
+        handle.seek(0)
+        cookie = handle.read(HardiskFooter.Cookie)
+        if cookie != HardiskFooter.CookieTag:
+            raise Exception("Invalid Hard disk footer")
+        else:
+            handle.seek(512)
+            cookie = handle.read(DynamicDiskHeader.Cookie)
+            if cookie != DynamicDiskHeader.CookieTag:
+                raise Exception("Invalid Dynamic disk header")
+
     # This field stores the absolute byte offset of the Block 
     # Allocation Table (BAT) in the file.
     def table_offset(self):
@@ -171,19 +209,43 @@ class HardiskFooterHelper:
     def __init__(self, hdf):
         self.hdf = hdf
 
-    def is_fixed_hardisk_image(self):
+    def is_fixed_vhd(self):
         FIXED_DISK_TAG = b'\xff\xff\xff\xff'
         tag = self.hdf.data_offset()
         dt = self.hdf.disk_type()
         # print("tag = {}, dt = {:X}".format(tag, dt))
         return tag[0:4] == FIXED_DISK_TAG and dt == HardiskFooter.DiskTypeEnum.FixedHardDisk
 
+class BootSector:
+
+    def burn(binfile, vhd):
+        with open(binfile, 'rb') as bin_handle:
+            # todo: check binfile size <= 510
+            bin_buf = bin_handle.read()
+            bin_len = len(bin_buf)
+            if bin_len > 510:
+                raise Exception("Bin file too large")
+            
+            # build boot sector data
+            boot_sector = [0] * 512
+            boot_sector[0:bin_len] = bin_buf[:]
+            boot_sector[-2] = 0x55
+            boot_sector[-1] = 0xaa
+
+            vhd.seek(0)
+            vhd.write(bytes(boot_sector))
+            vhd.flush()
+            
+
 def parse_int(raw, p_begin, p_end):
     v = raw[p_begin:p_end]
     return int.from_bytes(v, byteorder = BIG_ORDER)
 
 if __name__ == "__main__":
-    with open("sample.vhd", "rb") as handle:
+    src = sys.argv[1]
+    dst = sys.argv[2]
+    # todo: check os.path.exist
+    with open(dst, 'rb+') as handle:
         vhd_img = VirtualHardDiskImage(handle)
-        hdf_helper = HardiskFooterHelper(vhd_img.hdf)
-        print(hdf_helper.is_fixed_hardisk_image())
+        if vhd_img.is_fixed_vhd():
+            BootSector.burn(src, handle)
