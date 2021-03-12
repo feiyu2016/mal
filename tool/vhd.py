@@ -246,12 +246,16 @@ class BootSector:
         vhd_fh.seek(0)
         BootSector.do_burn(args, vhd_fh)
 
+    # fixme: not work
     def burn_dynamic(args, vhd, vhd_fh):
         vhd_fh.seek(512 + 1024 + vhd.bat.my_size)
         BootSector.do_burn(args, vhd_fh)
-        vhd_fh.seek(512 + 1024 + vhd.bat.my_size + 512)
-        vhd_fh.write(vhd.hdf.raw) 
-        vhd_fh.flush()
+        #write first location
+        # vhd_fh.seek(512 + 1024)
+        # vhd_fh.write((512 + 1024 + vhd.bat.my_size).to_bytes(4, byteorder = BIG_ORDER))
+        # vhd_fh.seek(512 + 1024 + vhd.bat.my_size + 512)
+        # vhd_fh.write(vhd.hdf.raw) 
+        # vhd_fh.flush()
 
             
 def yes_or_no(question):
