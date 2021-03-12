@@ -31,8 +31,8 @@ class VirtualHardDiskImage:
         try:
             self.hdf = HardiskFooter(handle)
             self.ddh = DynamicDiskHeader(handle)
-            # n_entries = self.ddh.max_table_entries()
-            # self.bat = BAT(handle, n_entries)
+            n_entries = self.ddh.max_table_entries()
+            self.bat = BAT(handle, n_entries)
         except Exception as inst:
             pass
     
@@ -40,6 +40,9 @@ class VirtualHardDiskImage:
         if self.hdf and HardiskFooterHelper(self.hdf).is_fixed_vhd():
             return True
         return False
+    
+    def is_dynamic_vhd(self):
+        return self.ddh != None
 
         
 class HardiskFooter:
@@ -198,9 +201,12 @@ class BAT:
 
     def __init__(self, handle, n_entries):
         # Copy of hard disk footer + Dynamic Disk Header
-        handle.seek(512 + 1024)
-        self.raw = handle.read(BAT.EntrySize * n_entries)
-
+        # handle.seek(512 + 1024)
+        my_size = BAT.EntrySize * n_entries
+        # self.raw = handle.read(my_size)
+        self.n_entries = n_entries
+        self.my_size = my_size
+    
 
 class HardiskFooterHelper:
 
@@ -215,8 +221,7 @@ class HardiskFooterHelper:
         return tag[0:4] == FIXED_DISK_TAG and dt == HardiskFooter.DiskTypeEnum.FixedHardDisk
 
 class BootSector:
-
-    def burn(args, vhd):
+    def do_burn(args, vhd_fh):
         with open(args.src, 'rb') as bin_handle:
             # todo: check binfile size <= 510
             bin_buf = bin_handle.read()
@@ -233,10 +238,21 @@ class BootSector:
                 do_it = yes_or_no("{} will be overwrite, are you sure? ".format(args.dst))
 
             if do_it:
-                vhd.seek(0)
-                vhd.write(bytes(boot_sector))
-                vhd.flush()
+                vhd_fh.write(bytes(boot_sector))
+                vhd_fh.flush()
                 print("Success: {} write to {} boot sector".format(args.src, args.dst))
+    
+    def burn(args, vhd_fh):
+        vhd_fh.seek(0)
+        BootSector.do_burn(args, vhd_fh)
+
+    def burn_dynamic(args, vhd, vhd_fh):
+        vhd_fh.seek(512 + 1024 + vhd.bat.my_size)
+        BootSector.do_burn(args, vhd_fh)
+        vhd_fh.seek(512 + 1024 + vhd.bat.my_size + 512)
+        vhd_fh.write(vhd.hdf.raw) 
+        vhd_fh.flush()
+
             
 def yes_or_no(question):
     answer = input(question + "(y/n): ").lower().strip()
@@ -272,6 +288,8 @@ if __name__ == "__main__":
                 vhd_img = VirtualHardDiskImage(handle)
                 if vhd_img.is_fixed_vhd():
                     BootSector.burn(args, handle)
+                # elif vhd_img.is_dynamic_vhd():
+                    # BootSector.burn_dynamic(args, vhd_img, handle)
                 else:
                     print("Error: {} is not Fixed hard disk image".format(args.dst))
     else:
