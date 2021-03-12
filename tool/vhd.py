@@ -13,12 +13,8 @@ Functions:
 2. Write asm.bin to vhd boot sector
 
 Todo:
-- * write asm.bin to vhd(fixed) boot sector
 * write asm.bin to vhd(dynamic) boot sector
 * print vhd file info (-v, -vv)
-* argparse
-* write vhd confirm, force with -f
-* is valid vhd
 '''
 
 BIG_ORDER = 'big'
@@ -232,8 +228,8 @@ class BootSector:
             boot_sector[-2] = 0x55
             boot_sector[-1] = 0xaa
 
-            do_it = False
-            if not args.force_write:
+            do_it = args.force_write 
+            if not do_it:
                 do_it = yes_or_no("{} will be overwrite, are you sure? ".format(args.dst))
 
             if do_it:
