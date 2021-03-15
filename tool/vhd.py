@@ -222,26 +222,30 @@ class HardiskFooterHelper:
 
 class BootSector:
     def do_burn(args, vhd_fh):
-        with open(args.src, 'rb') as bin_handle:
-            # todo: check binfile size <= 510
-            bin_buf = bin_handle.read()
-            bin_len = len(bin_buf)
+        bin_len = os.path.getsize(args.src)
+        if bin_len > 512:
+            print("Error: {} too large, it should <= 512".foramt(args.src))
+            return
+
+        do_it = args.force_write 
+        if not do_it:
+            do_it = yes_or_no("{} will be overwrite, are you sure? ".format(args.dst))
+
+        if do_it:
+            with open(args.src, 'rb') as bin_handle:
+                bin_buf = bin_handle.read()
             
-            # build boot sector data
-            boot_sector = [0] * 512
-            boot_sector[0:bin_len] = bin_buf[:]
-            boot_sector[-2] = 0x55
-            boot_sector[-1] = 0xaa
+                # build boot sector data
+                boot_sector = [0] * 512
+                boot_sector[0:bin_len] = bin_buf[:]
+                if bin_len != 512:
+                    boot_sector[-2] = 0x55
+                    boot_sector[-1] = 0xaa
 
-            do_it = args.force_write 
-            if not do_it:
-                do_it = yes_or_no("{} will be overwrite, are you sure? ".format(args.dst))
-
-            if do_it:
                 vhd_fh.write(bytes(boot_sector))
                 vhd_fh.flush()
                 print("Success: {} write to {} boot sector".format(args.src, args.dst))
-    
+
     def burn(args, vhd_fh):
         vhd_fh.seek(0)
         BootSector.do_burn(args, vhd_fh)
@@ -284,18 +288,14 @@ if __name__ == "__main__":
 
     # check file exists
     if os.path.exists(args.src) and os.path.exists(args.dst):
-        # check bin file size
-        if os.path.getsize(args.src) > 510:
-            print("Error: {} file size too big, it must be <= 510".format(args.src))
-        else:
-            with open(args.dst, 'rb+') as handle:
-                vhd_img = VirtualHardDiskImage(handle)
-                if vhd_img.is_fixed_vhd():
-                    BootSector.burn(args, handle)
+        with open(args.dst, 'rb+') as handle:
+            vhd_img = VirtualHardDiskImage(handle)
+            if vhd_img.is_fixed_vhd():
+                BootSector.burn(args, handle)
                 # elif vhd_img.is_dynamic_vhd():
                     # BootSector.burn_dynamic(args, vhd_img, handle)
-                else:
-                    print("Error: {} is not Fixed hard disk image".format(args.dst))
+            else:
+                print("Error: {} is not Fixed hard disk image".format(args.dst))
     else:
         print("Error: src or dst not exist")
     
