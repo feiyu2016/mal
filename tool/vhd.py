@@ -51,7 +51,7 @@ class BootSector:
         BootSector.do_burn(args, vhd_fh)
             
 if __name__ == "__main__":
-    arg_parser = argparse.ArgumentParser()
+    arg_parser = argparse.ArgumentParser(description = 'Write bin to fixed size VHD.')
     arg_parser.add_argument('-f', dest='force_write', action='store_true', help='Without confirm, force write bin to dest vhd file')
     arg_parser.add_argument('src', help='source bin')
     arg_parser.add_argument('dst', help='destination vhd file')
