@@ -226,7 +226,7 @@ class BootSector:
         if bin_len > 512:
             print("Error: {} too large, it should <= 512".foramt(args.src))
             return
-
+        
         do_it = args.force_write 
         if not do_it:
             do_it = yes_or_no("{} will be overwrite, are you sure? ".format(args.dst))
@@ -234,13 +234,16 @@ class BootSector:
         if do_it:
             with open(args.src, 'rb') as bin_handle:
                 bin_buf = bin_handle.read()
+
+                if bin_len == 512:
+                    if bin_buf[-2] != 0x55 or bin_buf[-1] != 0xaa:
+                        print("Warn: {} lack of bootable tag".format(args.src))
             
                 # build boot sector data
                 boot_sector = [0] * 512
                 boot_sector[0:bin_len] = bin_buf[:]
-                if bin_len != 512:
-                    boot_sector[-2] = 0x55
-                    boot_sector[-1] = 0xaa
+                boot_sector[-2] = 0x55
+                boot_sector[-1] = 0xaa
 
                 vhd_fh.write(bytes(boot_sector))
                 vhd_fh.flush()
@@ -249,17 +252,6 @@ class BootSector:
     def burn(args, vhd_fh):
         vhd_fh.seek(0)
         BootSector.do_burn(args, vhd_fh)
-
-    # fixme: not work
-    def burn_dynamic(args, vhd, vhd_fh):
-        vhd_fh.seek(512 + 1024 + vhd.bat.my_size)
-        BootSector.do_burn(args, vhd_fh)
-        #write first location
-        # vhd_fh.seek(512 + 1024)
-        # vhd_fh.write((512 + 1024 + vhd.bat.my_size).to_bytes(4, byteorder = BIG_ORDER))
-        # vhd_fh.seek(512 + 1024 + vhd.bat.my_size + 512)
-        # vhd_fh.write(vhd.hdf.raw) 
-        # vhd_fh.flush()
 
             
 def yes_or_no(question):
@@ -292,10 +284,8 @@ if __name__ == "__main__":
             vhd_img = VirtualHardDiskImage(handle)
             if vhd_img.is_fixed_vhd():
                 BootSector.burn(args, handle)
-                # elif vhd_img.is_dynamic_vhd():
-                    # BootSector.burn_dynamic(args, vhd_img, handle)
             else:
                 print("Error: {} is not Fixed hard disk image".format(args.dst))
     else:
-        print("Error: src or dst not exist")
+        print("Error: {} or {} not exist".format(args.src, args.dst))
     
