@@ -6,6 +6,6 @@ class GC37 {
         allocation1 = new byte[2 * _1MB];
         allocation2 = new byte[2 * _1MB];
         allocation3 = new byte[2 * _1MB];
-        allocation4 = new byte[4 * _1MB];
+        allocation4 = new byte[4 * _1MB]; // Minor GC
     }
 }
