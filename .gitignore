@@ -1,4 +1,5 @@
 *.vhd
 *.bin
+*.class
 tmp/
 __pycache__/
